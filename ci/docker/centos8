@@ -1,4 +1,5 @@
 ARG BASE=centos:8
+
 FROM ${BASE} AS yum
 RUN yum install -y \
 	which \
@@ -44,3 +45,5 @@ RUN useradd --shell /bin/bash libgit2 --create-home
 FROM adduser AS configure
 ENV PKG_CONFIG_PATH /usr/local/lib/pkgconfig
 RUN mkdir /var/run/sshd
+RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local && \
+    ldconfig
