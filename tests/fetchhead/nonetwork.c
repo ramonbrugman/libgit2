@@ -78,7 +78,7 @@ void test_fetchhead_nonetwork__write(void)
 {
 	git_vector fetchhead_vector = GIT_VECTOR_INIT;
 	git_fetchhead_ref *fetchhead_ref;
-	git_buf fetchhead_buf = GIT_BUF_INIT;
+	git_str fetchhead_buf = GIT_STR_INIT;
 	int equals = 0;
 	size_t i;
 
@@ -94,7 +94,7 @@ void test_fetchhead_nonetwork__write(void)
 
 	equals = (strcmp(fetchhead_buf.ptr, FETCH_HEAD_WILDCARD_DATA_LOCAL) == 0);
 
-	git_buf_dispose(&fetchhead_buf);
+	git_str_dispose(&fetchhead_buf);
 
 	git_vector_foreach(&fetchhead_vector, i, fetchhead_ref) {
 		git_fetchhead_ref_free(fetchhead_ref);
@@ -408,7 +408,7 @@ static bool found_master;
 static bool found_haacked;
 static bool find_master_haacked_called;
 
-int find_master_haacked(const char *ref_name, const char *remote_url, const git_oid *oid, unsigned int is_merge, void *payload)
+static int find_master_haacked(const char *ref_name, const char *remote_url, const git_oid *oid, unsigned int is_merge, void *payload)
 {
 	GIT_UNUSED(remote_url);
 	GIT_UNUSED(oid);
@@ -431,7 +431,7 @@ int find_master_haacked(const char *ref_name, const char *remote_url, const git_
 void test_fetchhead_nonetwork__create_when_refpecs_given(void)
 {
 	git_remote *remote;
-	git_buf path = GIT_BUF_INIT;
+	git_str path = GIT_STR_INIT;
 	char *refspec1 = "refs/heads/master";
 	char *refspec2 = "refs/heads/haacked";
 	char *refspecs[] = { refspec1, refspec2 };
@@ -443,12 +443,12 @@ void test_fetchhead_nonetwork__create_when_refpecs_given(void)
 	cl_set_cleanup(&cleanup_repository, "./test1");
 	cl_git_pass(git_repository_init(&g_repo, "./test1", 0));
 
-	cl_git_pass(git_buf_joinpath(&path, git_repository_path(g_repo), "FETCH_HEAD"));
+	cl_git_pass(git_str_joinpath(&path, git_repository_path(g_repo), "FETCH_HEAD"));
 	cl_git_pass(git_remote_create(&remote, g_repo, "origin", cl_fixture("testrepo.git")));
 
-	cl_assert(!git_path_exists(path.ptr));
+	cl_assert(!git_fs_path_exists(path.ptr));
 	cl_git_pass(git_remote_fetch(remote, &specs, NULL, NULL));
-	cl_assert(git_path_exists(path.ptr));
+	cl_assert(git_fs_path_exists(path.ptr));
 
 	cl_git_pass(git_repository_fetchhead_foreach(g_repo, find_master_haacked, NULL));
 	cl_assert(find_master_haacked_called);
@@ -456,7 +456,7 @@ void test_fetchhead_nonetwork__create_when_refpecs_given(void)
 	cl_assert(found_haacked);
 
 	git_remote_free(remote);
-	git_buf_dispose(&path);
+	git_str_dispose(&path);
 }
 
 static bool count_refs_called;
@@ -466,7 +466,7 @@ struct prefix_count {
 	int expected;
 };
 
-int count_refs(const char *ref_name, const char *remote_url, const git_oid *oid, unsigned int is_merge, void *payload)
+static int count_refs(const char *ref_name, const char *remote_url, const git_oid *oid, unsigned int is_merge, void *payload)
 {
 	int i;
 	struct prefix_count *prefix_counts = (struct prefix_count *) payload;
@@ -488,7 +488,7 @@ int count_refs(const char *ref_name, const char *remote_url, const git_oid *oid,
 void test_fetchhead_nonetwork__create_with_multiple_refspecs(void)
 {
 	git_remote *remote;
-	git_buf path = GIT_BUF_INIT;
+	git_str path = GIT_STR_INIT;
 
 	cl_set_cleanup(&cleanup_repository, "./test1");
 	cl_git_pass(git_repository_init(&g_repo, "./test1", 0));
@@ -499,16 +499,16 @@ void test_fetchhead_nonetwork__create_with_multiple_refspecs(void)
 	/* Pick up the new refspec */
 	cl_git_pass(git_remote_lookup(&remote, g_repo, "origin"));
 
-	cl_git_pass(git_buf_joinpath(&path, git_repository_path(g_repo), "FETCH_HEAD"));
-	cl_assert(!git_path_exists(path.ptr));
+	cl_git_pass(git_str_joinpath(&path, git_repository_path(g_repo), "FETCH_HEAD"));
+	cl_assert(!git_fs_path_exists(path.ptr));
 	cl_git_pass(git_remote_fetch(remote, NULL, NULL, NULL));
-	cl_assert(git_path_exists(path.ptr));
+	cl_assert(git_fs_path_exists(path.ptr));
 
 	{
 		int i;
 		struct prefix_count prefix_counts[] = {
 			{"refs/notes/", 0, 1},
-			{"refs/heads/", 0, 12},
+			{"refs/heads/", 0, 13},
 			{"refs/tags/", 0, 7},
 			{NULL, 0, 0},
 		};
@@ -520,7 +520,7 @@ void test_fetchhead_nonetwork__create_with_multiple_refspecs(void)
 	}
 
 	git_remote_free(remote);
-	git_buf_dispose(&path);
+	git_str_dispose(&path);
 }
 
 void test_fetchhead_nonetwork__credentials_are_stripped(void)

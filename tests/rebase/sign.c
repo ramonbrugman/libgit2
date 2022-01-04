@@ -86,7 +86,7 @@ committer Rebaser <rebaser@rebaser.rb> 1405694510 +0000\n";
 	git_rebase_free(rebase);
 }
 
-int create_cb_signed_gpg(
+static int create_cb_signed_gpg(
 	git_oid *out,
 	const git_signature *author,
 	const git_signature *committer,
@@ -249,13 +249,7 @@ void test_rebase_sign__create_propagates_error(void)
 }
 
 #ifndef GIT_DEPRECATE_HARD
-int signing_cb_passthrough(
-	git_buf *signature,
-	git_buf *signature_field,
-	const char *commit_content,
-	void *payload)
-{
-	static const char *expected_commit_content = "\
+static const char *expected_commit_content = "\
 tree cd99b26250099fc38d30bfaed7797a7275ed3366\n\
 parent f87d14a4a236582a0278a916340a793714256864\n\
 author Edward Thomson <ethomson@edwardthomson.com> 1405625055 -0400\n\
@@ -263,8 +257,14 @@ committer Rebaser <rebaser@rebaser.rb> 1405694510 +0000\n\
 \n\
 Modification 3 to gravy\n";
 
-	cl_assert_equal_b(false, git_buf_is_allocated(signature));
-	cl_assert_equal_b(false, git_buf_is_allocated(signature_field));
+int signing_cb_passthrough(
+	git_buf *signature,
+	git_buf *signature_field,
+	const char *commit_content,
+	void *payload)
+{
+	cl_assert_equal_i(0, signature->size);
+	cl_assert_equal_i(0, signature_field->size);
 	cl_assert_equal_s(expected_commit_content, commit_content);
 	cl_assert_equal_p(NULL, payload);
 	return GIT_PASSTHROUGH;
@@ -342,8 +342,8 @@ cttVRsdOoego+fiy08eFE+aJIeYiINRGhqOBTsuqG4jIdpdKxPE=\n\
 =KbsY\n\
 -----END PGP SIGNATURE-----";
 
-	cl_assert_equal_b(false, git_buf_is_allocated(signature));
-	cl_assert_equal_b(false, git_buf_is_allocated(signature_field));
+	cl_assert_equal_i(0, signature->size);
+	cl_assert_equal_i(0, signature_field->size);
 	cl_assert_equal_s(expected_commit_content, commit_content);
 	cl_assert_equal_p(NULL, payload);
 
@@ -426,8 +426,10 @@ int signing_cb_magic_field(
 	const char *signature_content = "magic word: pretty please";
 	const char *signature_field_content = "magicsig";
 
-	cl_assert_equal_b(false, git_buf_is_allocated(signature));
-	cl_assert_equal_b(false, git_buf_is_allocated(signature_field));
+	cl_assert_equal_p(NULL, signature->ptr);
+	cl_assert_equal_i(0, signature->size);
+	cl_assert_equal_p(NULL, signature_field->ptr);
+	cl_assert_equal_i(0, signature_field->size);
 	cl_assert_equal_s(expected_commit_content, commit_content);
 	cl_assert_equal_p(NULL, payload);
 

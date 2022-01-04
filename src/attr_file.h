@@ -13,7 +13,7 @@
 #include "git2/attr.h"
 #include "vector.h"
 #include "pool.h"
-#include "buffer.h"
+#include "str.h"
 #include "futils.h"
 
 #define GIT_ATTR_FILE			".gitattributes"
@@ -40,9 +40,10 @@ typedef enum {
 	GIT_ATTR_FILE_SOURCE_MEMORY = 0,
 	GIT_ATTR_FILE_SOURCE_FILE   = 1,
 	GIT_ATTR_FILE_SOURCE_INDEX  = 2,
-	GIT_ATTR_FILE_SOURCE_COMMIT = 3,
+	GIT_ATTR_FILE_SOURCE_HEAD   = 3,
+	GIT_ATTR_FILE_SOURCE_COMMIT = 4,
 
-	GIT_ATTR_FILE_NUM_SOURCES   = 4
+	GIT_ATTR_FILE_NUM_SOURCES   = 5
 } git_attr_file_source_t;
 
 typedef struct {
@@ -117,7 +118,7 @@ struct git_attr_file_entry {
 };
 
 typedef struct {
-	git_buf  full;
+	git_str  full;
 	char    *path;
 	char    *basename;
 	int      is_dir;
@@ -131,8 +132,8 @@ typedef struct {
 	int key;
 	unsigned int init_setup:1,
 		init_sysdir:1;
-	git_buf sysdir;
-	git_buf tmp;
+	git_str sysdir;
+	git_str tmp;
 } git_attr_session;
 
 extern int git_attr_session__init(git_attr_session *attr_session, git_repository *repo);
@@ -226,7 +227,6 @@ typedef enum { GIT_DIR_FLAG_TRUE = 1, GIT_DIR_FLAG_FALSE = 0, GIT_DIR_FLAG_UNKNO
 
 extern int git_attr_path__init(
 	git_attr_path *out,
-	git_repository *repo,
 	const char *path,
 	const char *base,
 	git_dir_flag is_dir);

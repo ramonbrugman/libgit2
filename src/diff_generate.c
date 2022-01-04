@@ -586,7 +586,7 @@ int git_diff__oid_for_entry(
 	const git_oid *update_match)
 {
 	git_diff_generated *diff;
-	git_buf full_path = GIT_BUF_INIT;
+	git_str full_path = GIT_STR_INIT;
 	git_index_entry entry = *src;
 	git_filter_list *fl = NULL;
 	int error = 0;
@@ -605,8 +605,8 @@ int git_diff__oid_for_entry(
 		diff->base.perf.stat_calls++;
 
 		if (p_stat(full_path.ptr, &st) < 0) {
-			error = git_path_set_error(errno, entry.path, "stat");
-			git_buf_dispose(&full_path);
+			error = git_fs_path_set_error(errno, entry.path, "stat");
+			git_str_dispose(&full_path);
 			return error;
 		}
 
@@ -669,7 +669,7 @@ int git_diff__oid_for_entry(
 		}
  	}
 
-	git_buf_dispose(&full_path);
+	git_str_dispose(&full_path);
 	return error;
 }
 
@@ -1023,10 +1023,10 @@ static int handle_unmatched_new_item(
 
 		/* do not advance into directories that contain a .git file */
 		if (recurse_into_dir && !contains_oitem) {
-			git_buf *full = NULL;
+			git_str *full = NULL;
 			if (git_iterator_current_workdir_path(&full, info->new_iter) < 0)
 				return -1;
-			if (full && git_path_contains(full, DOT_GIT)) {
+			if (full && git_fs_path_contains(full, DOT_GIT)) {
 				/* TODO: warning if not a valid git repository */
 				recurse_into_dir = false;
 			}

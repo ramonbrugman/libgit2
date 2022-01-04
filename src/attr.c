@@ -68,7 +68,7 @@ int git_attr_get_ext(
 	if (git_repository_is_bare(repo))
 		dir_flag = GIT_DIR_FLAG_FALSE;
 
-	if (git_attr_path__init(&path, repo, pathname, git_repository_workdir(repo), dir_flag) < 0)
+	if (git_attr_path__init(&path, pathname, git_repository_workdir(repo), dir_flag) < 0)
 		return -1;
 
 	if ((error = collect_attr_files(repo, NULL, opts, pathname, &files)) < 0)
@@ -149,7 +149,7 @@ int git_attr_get_many_with_session(
 	if (git_repository_is_bare(repo))
 		dir_flag = GIT_DIR_FLAG_FALSE;
 
-	if (git_attr_path__init(&path, repo, pathname, git_repository_workdir(repo), dir_flag) < 0)
+	if (git_attr_path__init(&path, pathname, git_repository_workdir(repo), dir_flag) < 0)
 		return -1;
 
 	if ((error = collect_attr_files(repo, attr_session, opts, pathname, &files)) < 0)
@@ -264,7 +264,7 @@ int git_attr_foreach_ext(
 	if (git_repository_is_bare(repo))
 		dir_flag = GIT_DIR_FLAG_FALSE;
 
-	if (git_attr_path__init(&path, repo, pathname, git_repository_workdir(repo), dir_flag) < 0)
+	if (git_attr_path__init(&path, pathname, git_repository_workdir(repo), dir_flag) < 0)
 		return -1;
 
 	if ((error = collect_attr_files(repo, NULL, opts, pathname, &files)) < 0 ||
@@ -338,7 +338,7 @@ GIT_INLINE(int) preload_attr_file(
 }
 
 static int system_attr_file(
-	git_buf *out,
+	git_str *out,
 	git_attr_session *attr_session)
 {
 	int error;
@@ -366,11 +366,11 @@ static int system_attr_file(
 	if (attr_session->sysdir.size == 0)
 		return GIT_ENOTFOUND;
 
-	/* We can safely provide a git_buf with no allocation (asize == 0) to
-	 * a consumer. This allows them to treat this as a regular `git_buf`,
-	 * but their call to `git_buf_dispose` will not attempt to free it.
+	/* We can safely provide a git_str with no allocation (asize == 0) to
+	 * a consumer. This allows them to treat this as a regular `git_str`,
+	 * but their call to `git_str_dispose` will not attempt to free it.
 	 */
-	git_buf_attach_notowned(
+	git_str_attach_notowned(
 		out, attr_session->sysdir.ptr, attr_session->sysdir.size);
 	return 0;
 }
@@ -380,9 +380,9 @@ static int attr_setup(
 	git_attr_session *attr_session,
 	git_attr_options *opts)
 {
-	git_buf system = GIT_BUF_INIT, info = GIT_BUF_INIT;
+	git_str system = GIT_STR_INIT, info = GIT_STR_INIT;
 	git_attr_file_source index_source = { GIT_ATTR_FILE_SOURCE_INDEX, NULL, GIT_ATTR_FILE, NULL };
-	git_attr_file_source head_source = { GIT_ATTR_FILE_SOURCE_COMMIT, NULL, GIT_ATTR_FILE, NULL };
+	git_attr_file_source head_source = { GIT_ATTR_FILE_SOURCE_HEAD, NULL, GIT_ATTR_FILE, NULL };
 	git_attr_file_source commit_source = { GIT_ATTR_FILE_SOURCE_COMMIT, NULL, GIT_ATTR_FILE, NULL };
 	git_index *idx = NULL;
 	const char *workdir;
@@ -411,7 +411,7 @@ static int attr_setup(
 	                               git_repository_attr_cache(repo)->cfg_attr_file)) < 0)
 		goto out;
 
-	if ((error = git_repository_item_path(&info, repo, GIT_REPOSITORY_ITEM_INFO)) < 0 ||
+	if ((error = git_repository__item_path(&info, repo, GIT_REPOSITORY_ITEM_INFO)) < 0 ||
 	    (error = preload_attr_file(repo, attr_session, info.ptr, GIT_ATTR_FILE_INREPO)) < 0) {
 		if (error != GIT_ENOTFOUND)
 			goto out;
@@ -432,7 +432,12 @@ static int attr_setup(
 		goto out;
 
 	if ((opts && (opts->flags & GIT_ATTR_CHECK_INCLUDE_COMMIT) != 0)) {
-		commit_source.commit_id = opts->commit_id;
+#ifndef GIT_DEPRECATE_HARD
+		if (opts->commit_id)
+			commit_source.commit_id = opts->commit_id;
+		else
+#endif
+		commit_source.commit_id = &opts->attr_commit_id;
 
 		if ((error = preload_attr_source(repo, attr_session, &commit_source)) < 0)
 			goto out;
@@ -442,8 +447,8 @@ static int attr_setup(
 		attr_session->init_setup = 1;
 
 out:
-	git_buf_dispose(&system);
-	git_buf_dispose(&info);
+	git_str_dispose(&system);
+	git_str_dispose(&info);
 
 	return error;
 }
@@ -521,8 +526,10 @@ static int attr_decide_sources(
 		break;
 	}
 
-	if ((flags & GIT_ATTR_CHECK_INCLUDE_HEAD) != 0 ||
-	    (flags & GIT_ATTR_CHECK_INCLUDE_COMMIT) != 0)
+	if ((flags & GIT_ATTR_CHECK_INCLUDE_HEAD) != 0)
+		srcs[count++] = GIT_ATTR_FILE_SOURCE_HEAD;
+
+	if ((flags & GIT_ATTR_CHECK_INCLUDE_COMMIT) != 0)
 		srcs[count++] = GIT_ATTR_FILE_SOURCE_COMMIT;
 
 	return count;
@@ -582,8 +589,14 @@ static int push_one_attr(void *ref, const char *path)
 	for (i = 0; !error && i < n_src; ++i) {
 		git_attr_file_source source = { src[i], path, GIT_ATTR_FILE };
 
-		if (src[i] == GIT_ATTR_FILE_SOURCE_COMMIT && info->opts)
-			source.commit_id = info->opts->commit_id;
+		if (src[i] == GIT_ATTR_FILE_SOURCE_COMMIT && info->opts) {
+#ifndef GIT_DEPRECATE_HARD
+			if (info->opts->commit_id)
+				source.commit_id = info->opts->commit_id;
+			else
+#endif
+			source.commit_id = &info->opts->attr_commit_id;
+		}
 
 		error = push_attr_source(info->repo, info->attr_session, info->files,
 		                       &source, allow_macros);
@@ -612,9 +625,11 @@ static int collect_attr_files(
 	git_vector *files)
 {
 	int error = 0;
-	git_buf dir = GIT_BUF_INIT, attrfile = GIT_BUF_INIT;
+	git_str dir = GIT_STR_INIT, attrfile = GIT_STR_INIT;
 	const char *workdir = git_repository_workdir(repo);
 	attr_walk_up_info info = { NULL };
+
+	GIT_ASSERT(!git_fs_path_is_absolute(path));
 
 	if ((error = attr_setup(repo, attr_session, opts)) < 0)
 		return error;
@@ -622,10 +637,10 @@ static int collect_attr_files(
 	/* Resolve path in a non-bare repo */
 	if (workdir != NULL) {
 		if (!(error = git_repository_workdir_path(&dir, repo, path)))
-			error = git_path_find_dir(&dir);
+			error = git_fs_path_find_dir(&dir);
 	}
 	else {
-		error = git_path_dirname_r(&dir, path);
+		error = git_fs_path_dirname_r(&dir, path);
 	}
 
 	if (error < 0)
@@ -638,7 +653,7 @@ static int collect_attr_files(
 	 * - $GIT_PREFIX/etc/gitattributes
 	 */
 
-	if ((error = git_repository_item_path(&attrfile, repo, GIT_REPOSITORY_ITEM_INFO)) < 0 ||
+	if ((error = git_repository__item_path(&attrfile, repo, GIT_REPOSITORY_ITEM_INFO)) < 0 ||
 	    (error = push_attr_file(repo, attr_session, files, attrfile.ptr, GIT_ATTR_FILE_INREPO)) < 0) {
 		if (error != GIT_ENOTFOUND)
 			goto cleanup;
@@ -655,7 +670,7 @@ static int collect_attr_files(
 	if (!strcmp(dir.ptr, "."))
 		error = push_one_attr(&info, "");
 	else
-		error = git_path_walk_up(&dir, workdir, push_one_attr, &info);
+		error = git_fs_path_walk_up(&dir, workdir, push_one_attr, &info);
 
 	if (error < 0)
 		goto cleanup;
@@ -678,8 +693,8 @@ static int collect_attr_files(
  cleanup:
 	if (error < 0)
 		release_attr_files(files);
-	git_buf_dispose(&attrfile);
-	git_buf_dispose(&dir);
+	git_str_dispose(&attrfile);
+	git_str_dispose(&dir);
 
 	return error;
 }

@@ -1,3 +1,60 @@
+v1.3
+----
+
+This is release v1.3.0, "Zugunruhe".  This release includes only minor new features that will be helpful for users to have an orderly transition to the v2.0 lineage.
+
+## New Features
+* Support custom git extensions by @ethomson in https://github.com/libgit2/libgit2/pull/6031
+* Introduce `git_email_create`; deprecate `git_diff_format_email` by @ethomson in https://github.com/libgit2/libgit2/pull/6061
+
+## Deprecated APIs
+* `git_oidarray_free` is deprecated; callers should use `git_oidarray_dispose`
+
+## Bug fixes
+* #6028: Check if `threadstate->error_t.message` is not `git_buf__initbuf` before freeing. by @arroz in https://github.com/libgit2/libgit2/pull/6029
+* remote: Mark `git_remote_name_is_valid` as `GIT_EXTERN` by @lhchavez in https://github.com/libgit2/libgit2/pull/6032
+* Fix config parsing for multiline with multiple quoted comment chars by @basile-henry in https://github.com/libgit2/libgit2/pull/6043
+* indexer: Avoid one `mmap(2)`/`munmap(2)` pair per `git_indexer_append` call by @lhchavez in https://github.com/libgit2/libgit2/pull/6039
+* merge: Check file mode when resolving renames by @ccstolley in https://github.com/libgit2/libgit2/pull/6060
+* Allow proxy options when connecting with a detached remote. by @lrm29 in https://github.com/libgit2/libgit2/pull/6058
+* win32: allow empty environment variables by @ethomson in https://github.com/libgit2/libgit2/pull/6063
+* Fixes for deprecated APIs by @ethomson in https://github.com/libgit2/libgit2/pull/6066
+* filter: use a `git_oid` in filter options, not a pointer by @ethomson in https://github.com/libgit2/libgit2/pull/6067
+* diff: update `GIT_DIFF_IGNORE_BLANK_LINES` by @ethomson in https://github.com/libgit2/libgit2/pull/6068 
+* Attribute lookups are always on relative paths by @ethomson in https://github.com/libgit2/libgit2/pull/6073
+* Handle long paths when querying attributes by @ethomson in https://github.com/libgit2/libgit2/pull/6075
+
+## Code cleanups
+* notes: use a buffer internally by @ethomson in https://github.com/libgit2/libgit2/pull/6047
+* Fix coding style for pointer by @punkymaniac in https://github.com/libgit2/libgit2/pull/6045
+* Use __typeof__ GNUC keyword for ISO C compatibility by @duncanthomson in https://github.com/libgit2/libgit2/pull/6041
+* Discover libssh2 without pkg-config by @stac47 in https://github.com/libgit2/libgit2/pull/6053
+* Longpath filter bug by @lrm29 in https://github.com/libgit2/libgit2/pull/6055
+* Add test to ensure empty proxy env behaves like unset env by @sathieu in https://github.com/libgit2/libgit2/pull/6052
+* Stdint header condition has been reverted. by @lolgear in https://github.com/libgit2/libgit2/pull/6020
+* buf: `common_prefix` takes a string array by @ethomson in https://github.com/libgit2/libgit2/pull/6077
+* oidarray: introduce `git_oidarray_dispose` by @ethomson in https://github.com/libgit2/libgit2/pull/6076
+* examples: Free the git_config and git_config_entry after use by @257 in https://github.com/libgit2/libgit2/pull/6071
+
+## CI Improvements
+* ci: pull libssh2 from www.libssh2.org by @ethomson in https://github.com/libgit2/libgit2/pull/6064
+
+## Documentation changes
+* Update README.md by @shijinglu in https://github.com/libgit2/libgit2/pull/6050
+
+## New Contributors
+* @basile-henry made their first contribution in https://github.com/libgit2/libgit2/pull/6043
+* @duncanthomson made their first contribution in https://github.com/libgit2/libgit2/pull/6041
+* @stac47 made their first contribution in https://github.com/libgit2/libgit2/pull/6053
+* @shijinglu made their first contribution in https://github.com/libgit2/libgit2/pull/6050
+* @ccstolley made their first contribution in https://github.com/libgit2/libgit2/pull/6060
+* @sathieu made their first contribution in https://github.com/libgit2/libgit2/pull/6052
+* @257 made their first contribution in https://github.com/libgit2/libgit2/pull/6071
+
+**Full Changelog**: https://github.com/libgit2/libgit2/compare/v1.2.0...v1.3.0
+
+---------------------------------------------------------------------
+
 v1.2
 -----
 
@@ -171,6 +228,8 @@ This is meant to be the final minor release in the v1 lineage.  v2.0 will be the
 
 **Full Changelog**: https://github.com/libgit2/libgit2/compare/v1.1.0...v1.2.0
 
+---------------------------------------------------------------------
+
 v1.1
 ----
 
@@ -259,6 +318,8 @@ This is a bugfix release with the following changes:
 - A bug where the smart HTTP transport could not read large data packets
   has been fixed.  Previously, fetching from servers like Gerrit, that
   sent large data packets, would error.
+
+---------------------------------------------------------------------
 
 v1.0
 ----
@@ -739,6 +800,8 @@ release:
 * Tyler Ang-Wanek
 * Tyler Wanek
 
+---------------------------------------------------------------------
+
 v0.28
 -----
 
@@ -887,6 +950,8 @@ v0.28
   out such files is not allowed as this can make a Git implementation write
   outside of the repository and bypass the fsck checks for CVE-2018-11235.
 
+---------------------------------------------------------------------
+
 v0.27
 ---------
 
@@ -1003,6 +1068,8 @@ v0.27
   `git_odb_backend` interface have changed their signatures to allow providing
   the object's size and type to the caller.
 
+---------------------------------------------------------------------
+    
 v0.26
 -----
 
@@ -1247,6 +1314,8 @@ v0.25
   to provide the name of a merge driver to be used to handle files changed
   during a merge.
 
+---------------------------------------------------------------------
+
 v0.24
 -------
 
@@ -1361,6 +1430,8 @@ v0.24
 
 * `git_remote_connect()` now takes a `custom_headers` argument to set
   the extra HTTP header fields to send.
+
+---------------------------------------------------------------------
 
 v0.23
 ------
@@ -1660,6 +1731,8 @@ v0.23
 
 * It is no longer allowed to call `git_buf_grow()` on buffers
   borrowing the memory they point to.
+
+---------------------------------------------------------------------
 
 v0.22
 ------

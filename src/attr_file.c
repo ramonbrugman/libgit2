@@ -117,13 +117,13 @@ int git_attr_file__load(
 	git_tree *tree = NULL;
 	git_tree_entry *tree_entry = NULL;
 	git_blob *blob = NULL;
-	git_buf content = GIT_BUF_INIT;
+	git_str content = GIT_STR_INIT;
 	const char *content_str;
 	git_attr_file *file;
 	struct stat st;
 	bool nonexistent = false;
 	int bom_offset;
-	git_buf_bom_t bom;
+	git_str_bom_t bom;
 	git_oid id;
 	git_object_size_t blobsize;
 
@@ -143,7 +143,7 @@ int git_attr_file__load(
 		blobsize = git_blob_rawsize(blob);
 
 		GIT_ERROR_CHECK_BLOBSIZE(blobsize);
-		git_buf_put(&content, git_blob_rawcontent(blob), (size_t)blobsize);
+		git_str_put(&content, git_blob_rawcontent(blob), (size_t)blobsize);
 		break;
 	}
 	case GIT_ATTR_FILE_SOURCE_FILE: {
@@ -163,8 +163,9 @@ int git_attr_file__load(
 
 		break;
 	}
+	case GIT_ATTR_FILE_SOURCE_HEAD:
 	case GIT_ATTR_FILE_SOURCE_COMMIT: {
-		if (source->commit_id) {
+		if (source->type == GIT_ATTR_FILE_SOURCE_COMMIT) {
 			if ((error = git_commit_lookup(&commit, repo, source->commit_id)) < 0 ||
 			    (error = git_commit_tree(&tree, commit)) < 0)
 				goto cleanup;
@@ -197,7 +198,7 @@ int git_attr_file__load(
 		blobsize = git_blob_rawsize(blob);
 
 		GIT_ERROR_CHECK_BLOBSIZE(blobsize);
-		if ((error = git_buf_put(&content,
+		if ((error = git_str_put(&content,
 			git_blob_rawcontent(blob), (size_t)blobsize)) < 0)
 			goto cleanup;
 
@@ -212,10 +213,10 @@ int git_attr_file__load(
 		goto cleanup;
 
 	/* advance over a UTF8 BOM */
-	content_str = git_buf_cstr(&content);
-	bom_offset = git_buf_detect_bom(&bom, &content);
+	content_str = git_str_cstr(&content);
+	bom_offset = git_str_detect_bom(&bom, &content);
 
-	if (bom == GIT_BUF_BOM_UTF8)
+	if (bom == GIT_STR_BOM_UTF8)
 		content_str += bom_offset;
 
 	/* store the key of the attr_reader; don't bother with cache
@@ -234,6 +235,8 @@ int git_attr_file__load(
 		file->nonexistent = 1;
 	else if (source->type == GIT_ATTR_FILE_SOURCE_INDEX)
 		git_oid_cpy(&file->cache_data.oid, git_blob_id(blob));
+	else if (source->type == GIT_ATTR_FILE_SOURCE_HEAD)
+		git_oid_cpy(&file->cache_data.oid, git_tree_id(tree));
 	else if (source->type == GIT_ATTR_FILE_SOURCE_COMMIT)
 		git_oid_cpy(&file->cache_data.oid, git_tree_id(tree));
 	else if (source->type == GIT_ATTR_FILE_SOURCE_FILE)
@@ -247,7 +250,7 @@ cleanup:
 	git_tree_entry_free(tree_entry);
 	git_tree_free(tree);
 	git_commit_free(commit);
-	git_buf_dispose(&content);
+	git_str_dispose(&content);
 
 	return error;
 }
@@ -288,22 +291,29 @@ int git_attr_file__out_of_date(
 		return (git_oid__cmp(&file->cache_data.oid, &id) != 0);
 	}
 
+	case GIT_ATTR_FILE_SOURCE_HEAD: {
+		git_tree *tree = NULL;
+		int error = git_repository_head_tree(&tree, repo);
+
+		if (error < 0)
+			return error;
+
+		error = (git_oid__cmp(&file->cache_data.oid, git_tree_id(tree)) != 0);
+
+		git_tree_free(tree);
+		return error;
+	}
+
 	case GIT_ATTR_FILE_SOURCE_COMMIT: {
+		git_commit *commit = NULL;
 		git_tree *tree = NULL;
 		int error;
 
-		if (source->commit_id) {
-			git_commit *commit = NULL;
+		if ((error = git_commit_lookup(&commit, repo, source->commit_id)) < 0)
+			return error;
 
-			if ((error = git_commit_lookup(&commit, repo, source->commit_id)) < 0)
-				return error;
-
-			error = git_commit_tree(&tree, commit);
-
-			git_commit_free(commit);
-		} else {
-			error = git_repository_head_tree(&tree, repo);
-		}
+		error = git_commit_tree(&tree, commit);
+		git_commit_free(commit);
 
 		if (error < 0)
 			return error;
@@ -335,7 +345,7 @@ int git_attr_file__parse_buffer(
 	int error = 0;
 
 	/* If subdir file path, convert context for file paths */
-	if (attrs->entry && git_path_root(attrs->entry->path) < 0 &&
+	if (attrs->entry && git_fs_path_root(attrs->entry->path) < 0 &&
 	    !git__suffixcmp(attrs->entry->path, "/" GIT_ATTR_FILE))
 		context = attrs->entry->path;
 
@@ -425,7 +435,7 @@ int git_attr_file__lookup_one(
 
 int git_attr_file__load_standalone(git_attr_file **out, const char *path)
 {
-	git_buf content = GIT_BUF_INIT;
+	git_str content = GIT_STR_INIT;
 	git_attr_file_source source = { GIT_ATTR_FILE_SOURCE_FILE };
 	git_attr_file *file = NULL;
 	int error;
@@ -447,7 +457,7 @@ int git_attr_file__load_standalone(git_attr_file **out, const char *path)
 out:
 	if (error < 0)
 		git_attr_file__free(file);
-	git_buf_dispose(&content);
+	git_str_dispose(&content);
 
 	return error;
 }
@@ -541,7 +551,6 @@ git_attr_assignment *git_attr_rule__lookup_assignment(
 
 int git_attr_path__init(
 	git_attr_path *info,
-	git_repository *repo,
 	const char *path,
 	const char *base,
 	git_dir_flag dir_flag)
@@ -549,10 +558,9 @@ int git_attr_path__init(
 	ssize_t root;
 
 	/* build full path as best we can */
-	git_buf_init(&info->full, 0);
+	git_str_init(&info->full, 0);
 
-	if (git_path_join_unrooted(&info->full, path, base, &root) < 0 ||
-	    git_path_validate_workdir_buf(repo, &info->full) < 0)
+	if (git_fs_path_join_unrooted(&info->full, path, base, &root) < 0)
 		return -1;
 
 	info->path = info->full.ptr + root;
@@ -588,7 +596,7 @@ int git_attr_path__init(
 
 	case GIT_DIR_FLAG_UNKNOWN:
 	default:
-		info->is_dir = (int)git_path_isdir(info->full.ptr);
+		info->is_dir = (int)git_fs_path_isdir(info->full.ptr);
 		break;
 	}
 
@@ -597,7 +605,7 @@ int git_attr_path__init(
 
 void git_attr_path__free(git_attr_path *info)
 {
-	git_buf_dispose(&info->full);
+	git_str_dispose(&info->full);
 	info->path = NULL;
 	info->basename = NULL;
 }
@@ -1012,8 +1020,8 @@ void git_attr_session__free(git_attr_session *session)
 	if (!session)
 		return;
 
-	git_buf_dispose(&session->sysdir);
-	git_buf_dispose(&session->tmp);
+	git_str_dispose(&session->sysdir);
+	git_str_dispose(&session->tmp);
 
 	memset(session, 0, sizeof(git_attr_session));
 }

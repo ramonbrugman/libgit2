@@ -9,6 +9,7 @@
 
 #include <git2.h>
 #include "alloc.h"
+#include "buf.h"
 #include "cache.h"
 #include "common.h"
 #include "filter.h"
@@ -52,6 +53,7 @@ static void libgit2_settings_global_shutdown(void)
 {
 	git__free(git__user_agent);
 	git__free(git__ssl_ciphers);
+	git_repository__free_extensions();
 }
 
 static int git_libgit2_settings_global_init(void)
@@ -191,15 +193,17 @@ int git_libgit2_opts(int key, ...)
 		{
 			int sysdir = va_arg(ap, int);
 			git_buf *out = va_arg(ap, git_buf *);
-			const git_buf *tmp;
+			git_str str = GIT_STR_INIT;
+			const git_str *tmp;
 			int level;
 
-			if ((error = config_level_to_sysdir(&level, sysdir)) < 0 ||
-			    (error = git_buf_sanitize(out)) < 0 ||
-			    (error = git_sysdir_get(&tmp, level)) < 0)
+			if ((error = git_buf_tostr(&str, out)) < 0 ||
+			    (error = config_level_to_sysdir(&level, sysdir)) < 0 ||
+			    (error = git_sysdir_get(&tmp, level)) < 0 ||
+			    (error = git_str_put(&str, tmp->ptr, tmp->size)) < 0)
 				break;
 
-			error = git_buf_sets(out, tmp->ptr);
+			error = git_buf_fromstr(out, &str);
 		}
 		break;
 
@@ -236,13 +240,15 @@ int git_libgit2_opts(int key, ...)
 	case GIT_OPT_GET_TEMPLATE_PATH:
 		{
 			git_buf *out = va_arg(ap, git_buf *);
-			const git_buf *tmp;
+			git_str str = GIT_STR_INIT;
+			const git_str *tmp;
 
-			if ((error = git_buf_sanitize(out)) < 0 ||
-			    (error = git_sysdir_get(&tmp, GIT_SYSDIR_TEMPLATE)) < 0)
+			if ((error = git_buf_tostr(&str, out)) < 0 ||
+			    (error = git_sysdir_get(&tmp, GIT_SYSDIR_TEMPLATE)) < 0 ||
+			    (error = git_str_put(&str, tmp->ptr, tmp->size)) < 0)
 				break;
 
-			error = git_buf_sets(out, tmp->ptr);
+			error = git_buf_fromstr(out, &str);
 		}
 		break;
 
@@ -305,9 +311,13 @@ int git_libgit2_opts(int key, ...)
 	case GIT_OPT_GET_USER_AGENT:
 		{
 			git_buf *out = va_arg(ap, git_buf *);
-			if ((error = git_buf_sanitize(out)) < 0)
+			git_str str = GIT_STR_INIT;
+
+			if ((error = git_buf_tostr(&str, out)) < 0 ||
+			    (error = git_str_puts(&str, git__user_agent)) < 0)
 				break;
-			error = git_buf_sets(out, git__user_agent);
+
+			error = git_buf_fromstr(out, &str);
 		}
 		break;
 
@@ -365,6 +375,28 @@ int git_libgit2_opts(int key, ...)
 
 	case GIT_OPT_SET_ODB_LOOSE_PRIORITY:
 		git_odb__loose_priority = va_arg(ap, int);
+		break;
+
+	case GIT_OPT_SET_EXTENSIONS:
+		{
+			const char **extensions = va_arg(ap, const char **);
+			size_t len = va_arg(ap, size_t);
+			error = git_repository__set_extensions(extensions, len);
+		}
+		break;
+
+	case GIT_OPT_GET_EXTENSIONS:
+		{
+			git_strarray *out = va_arg(ap, git_strarray *);
+			char **extensions;
+			size_t len;
+
+			if ((error = git_repository__extensions(&extensions, &len)) < 0)
+				break;
+
+			out->strings = extensions;
+			out->count = len;
+		}
 		break;
 
 	default:

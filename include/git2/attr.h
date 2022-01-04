@@ -83,7 +83,7 @@ typedef enum {
 	GIT_ATTR_VALUE_UNSPECIFIED = 0, /**< The attribute has been left unspecified */
 	GIT_ATTR_VALUE_TRUE,   /**< The attribute has been set */
 	GIT_ATTR_VALUE_FALSE,  /**< The attribute has been unset */
-	GIT_ATTR_VALUE_STRING, /**< This attribute has a value */
+	GIT_ATTR_VALUE_STRING  /**< This attribute has a value */
 } git_attr_value_t;
 
 /**
@@ -147,11 +147,17 @@ typedef struct {
 	/** A combination of GIT_ATTR_CHECK flags */
 	unsigned int flags;
 
+#ifdef GIT_DEPRECATE_HARD
+	void *reserved;
+#else
+	git_oid *commit_id;
+#endif
+
 	/**
 	 * The commit to load attributes from, when
 	 * `GIT_ATTR_CHECK_INCLUDE_COMMIT` is specified.
 	 */
-	git_oid *commit_id;
+	git_oid attr_commit_id;
 } git_attr_options;
 
 #define GIT_ATTR_OPTIONS_VERSION 1

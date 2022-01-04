@@ -1,7 +1,6 @@
 #include "clar_libgit2.h"
 
 #include "git2/revparse.h"
-#include "buffer.h"
 #include "refs.h"
 #include "path.h"
 
@@ -292,7 +291,7 @@ void test_refs_revparse__upstream(void)
 void test_refs_revparse__ordinal(void)
 {
 	assert_invalid_single_spec("master@{-2}");
-	
+
 	/* TODO: make the test below actually fail
 	 * cl_git_fail(git_revparse_single(&g_obj, g_repo, "master@{1a}"));
 	 */
@@ -326,19 +325,19 @@ void test_refs_revparse__previous_head(void)
 static void create_fake_stash_reference_and_reflog(git_repository *repo)
 {
 	git_reference *master, *new_master;
-	git_buf log_path = GIT_BUF_INIT;
+	git_str log_path = GIT_STR_INIT;
 
-	git_buf_joinpath(&log_path, git_repository_path(repo), "logs/refs/fakestash");
+	git_str_joinpath(&log_path, git_repository_path(repo), "logs/refs/fakestash");
 
-	cl_assert_equal_i(false, git_path_isfile(git_buf_cstr(&log_path)));
+	cl_assert_equal_i(false, git_fs_path_isfile(git_str_cstr(&log_path)));
 
 	cl_git_pass(git_reference_lookup(&master, repo, "refs/heads/master"));
 	cl_git_pass(git_reference_rename(&new_master, master, "refs/fakestash", 0, NULL));
 	git_reference_free(master);
 
-	cl_assert_equal_i(true, git_path_isfile(git_buf_cstr(&log_path)));
+	cl_assert_equal_i(true, git_fs_path_isfile(git_str_cstr(&log_path)));
 
-	git_buf_dispose(&log_path);
+	git_str_dispose(&log_path);
 	git_reference_free(new_master);
 }
 
@@ -400,7 +399,7 @@ void test_refs_revparse__date(void)
 	 * a65fedf HEAD@{1335806603 -0900}: commit:
 	 * be3563a HEAD@{1335806563 -0700}: clone: from /Users/ben/src/libgit2/tests/resour
 	 */
-	test_object("HEAD@{10 years ago}", NULL);
+	test_object("HEAD@{10 years ago}", "be3563ae3f795b2b4353bcce3a527ad0a4f7f644");
 
 	test_object("HEAD@{1 second}", "a65fedf39aefe402d3bb6e24df4d4f5fe4547750");
 	test_object("HEAD@{1 second ago}", "a65fedf39aefe402d3bb6e24df4d4f5fe4547750");
@@ -418,11 +417,12 @@ void test_refs_revparse__date(void)
 
 
 	/*
-	 * $ git reflog -1 "master@{2012-04-30 17:22:42 +0000}"
-	 * warning: Log for 'master' only goes back to Mon, 30 Apr 2012 09:22:43 -0800.
+	 * $ git rev-parse "master@{2012-04-30 17:22:42 +0000}"
+	 * warning: log for 'master' only goes back to Mon, 30 Apr 2012 09:22:43 -0800
+	 * be3563ae3f795b2b4353bcce3a527ad0a4f7f644
 	 */
-	test_object("master@{2012-04-30 17:22:42 +0000}", NULL);
-	test_object("master@{2012-04-30 09:22:42 -0800}", NULL);
+	test_object("master@{2012-04-30 17:22:42 +0000}", "be3563ae3f795b2b4353bcce3a527ad0a4f7f644");
+	test_object("master@{2012-04-30 09:22:42 -0800}", "be3563ae3f795b2b4353bcce3a527ad0a4f7f644");
 
 	/*
 	 * $ git reflog -1 "master@{2012-04-30 17:22:43 +0000}"
@@ -452,6 +452,25 @@ void test_refs_revparse__date(void)
 	 */
 	test_object("master@{1335806603}", "a65fedf39aefe402d3bb6e24df4d4f5fe4547750");
 	test_object("master@{1335806602}", "be3563ae3f795b2b4353bcce3a527ad0a4f7f644");
+
+	/*
+	 * $ git rev-parse "with-empty-log@{2 days ago}" --
+	 * fatal: log for refs/heads/with-empty-log is empty
+	 */
+	test_object("with-empty-log@{2 days ago}", NULL);
+}
+
+void test_refs_revparse__invalid_date(void)
+{
+	/*
+	 * $ git rev-parse HEAD@{} --
+	 * fatal: bad revision 'HEAD@{}'
+	 *
+	 * $ git rev-parse HEAD@{NEITHER_INTEGER_NOR_DATETIME} --
+	 * fatal: bad revision 'HEAD@{NEITHER_INTEGER_NOR_DATETIME}'
+	 */
+	test_object("HEAD@{}", NULL);
+	test_object("HEAD@{NEITHER_INTEGER_NOR_DATETIME}", NULL);
 }
 
 void test_refs_revparse__colon(void)
@@ -555,7 +574,7 @@ void test_refs_revparse__a_too_short_objectid_returns_EAMBIGUOUS(void)
 /*
  * $ echo "aabqhq" | git hash-object -t blob --stdin
  * dea509d0b3cb8ee0650f6ca210bc83f4678851ba
- * 
+ *
  * $ echo "aaazvc" | git hash-object -t blob --stdin
  * dea509d097ce692e167dfc6a48a7a280cc5e877e
  */
@@ -569,11 +588,11 @@ void test_refs_revparse__a_not_precise_enough_objectid_returns_EAMBIGUOUS(void)
 
 	cl_git_mkfile("testrepo/one.txt", "aabqhq\n");
 	cl_git_mkfile("testrepo/two.txt", "aaazvc\n");
-	
+
 	cl_git_pass(git_repository_index(&index, repo));
 	cl_git_pass(git_index_add_bypath(index, "one.txt"));
 	cl_git_pass(git_index_add_bypath(index, "two.txt"));
-	
+
 	cl_git_fail_with(git_revparse_single(&obj, repo, "dea509d0"), GIT_EAMBIGUOUS);
 
 	cl_git_pass(git_revparse_single(&obj, repo, "dea509d09"));
@@ -588,7 +607,7 @@ void test_refs_revparse__issue_994(void)
 	git_repository *repo;
 	git_reference *head, *with_at;
 	git_object *target;
-	
+
 	repo = cl_git_sandbox_init("testrepo.git");
 
 	cl_assert_equal_i(GIT_ENOTFOUND,

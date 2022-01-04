@@ -12,7 +12,7 @@ enum repo_mode {
 };
 
 static git_repository *g_repo = NULL;
-static git_buf g_global_path = GIT_BUF_INIT;
+static git_str g_global_path = GIT_STR_INIT;
 
 void test_repo_init__initialize(void)
 {
@@ -26,7 +26,7 @@ void test_repo_init__cleanup(void)
 {
 	git_libgit2_opts(GIT_OPT_SET_SEARCH_PATH, GIT_CONFIG_LEVEL_GLOBAL,
 		g_global_path.ptr);
-	git_buf_dispose(&g_global_path);
+	git_str_dispose(&g_global_path);
 
 	cl_fixture_cleanup("tmp_global_path");
 }
@@ -47,7 +47,7 @@ static void ensure_repository_init(
 {
 	const char *workdir;
 
-	cl_assert(!git_path_isdir(working_directory));
+	cl_assert(!git_fs_path_isdir(working_directory));
 
 	cl_git_pass(git_repository_init(&g_repo, working_directory, is_bare));
 
@@ -100,16 +100,16 @@ void test_repo_init__bare_repo_noslash(void)
 
 void test_repo_init__bare_repo_escaping_current_workdir(void)
 {
-	git_buf path_repository = GIT_BUF_INIT;
-	git_buf path_current_workdir = GIT_BUF_INIT;
+	git_str path_repository = GIT_STR_INIT;
+	git_str path_current_workdir = GIT_STR_INIT;
 
-	cl_git_pass(git_path_prettify_dir(&path_current_workdir, ".", NULL));
+	cl_git_pass(git_fs_path_prettify_dir(&path_current_workdir, ".", NULL));
 
-	cl_git_pass(git_buf_joinpath(&path_repository, git_buf_cstr(&path_current_workdir), "a/b/c"));
-	cl_git_pass(git_futils_mkdir_r(git_buf_cstr(&path_repository), GIT_DIR_MODE));
+	cl_git_pass(git_str_joinpath(&path_repository, git_str_cstr(&path_current_workdir), "a/b/c"));
+	cl_git_pass(git_futils_mkdir_r(git_str_cstr(&path_repository), GIT_DIR_MODE));
 
 	/* Change the current working directory */
-	cl_git_pass(chdir(git_buf_cstr(&path_repository)));
+	cl_git_pass(chdir(git_str_cstr(&path_repository)));
 
 	/* Initialize a bare repo with a relative path escaping out of the current working directory */
 	cl_git_pass(git_repository_init(&g_repo, "../d/e.git", 1));
@@ -121,10 +121,10 @@ void test_repo_init__bare_repo_escaping_current_workdir(void)
 	/* Open a bare repo with a relative path escaping out of the current working directory */
 	cl_git_pass(git_repository_open(&g_repo, "../d/e.git"));
 
-	cl_git_pass(chdir(git_buf_cstr(&path_current_workdir)));
+	cl_git_pass(chdir(git_str_cstr(&path_current_workdir)));
 
-	git_buf_dispose(&path_current_workdir);
-	git_buf_dispose(&path_repository);
+	git_str_dispose(&path_current_workdir);
+	git_str_dispose(&path_repository);
 
 	cleanup_repository("a");
 }
@@ -168,26 +168,26 @@ void test_repo_init__reinit_too_recent_bare_repo(void)
 
 void test_repo_init__additional_templates(void)
 {
-	git_buf path = GIT_BUF_INIT;
+	git_str path = GIT_STR_INIT;
 
 	cl_set_cleanup(&cleanup_repository, "tester");
 
 	ensure_repository_init("tester", 0, "tester/.git/", "tester/");
 
 	cl_git_pass(
-		git_buf_joinpath(&path, git_repository_path(g_repo), "description"));
-	cl_assert(git_path_isfile(git_buf_cstr(&path)));
+		git_str_joinpath(&path, git_repository_path(g_repo), "description"));
+	cl_assert(git_fs_path_isfile(git_str_cstr(&path)));
 
 	cl_git_pass(
-		git_buf_joinpath(&path, git_repository_path(g_repo), "info/exclude"));
-	cl_assert(git_path_isfile(git_buf_cstr(&path)));
+		git_str_joinpath(&path, git_repository_path(g_repo), "info/exclude"));
+	cl_assert(git_fs_path_isfile(git_str_cstr(&path)));
 
 	cl_git_pass(
-		git_buf_joinpath(&path, git_repository_path(g_repo), "hooks"));
-	cl_assert(git_path_isdir(git_buf_cstr(&path)));
+		git_str_joinpath(&path, git_repository_path(g_repo), "hooks"));
+	cl_assert(git_fs_path_isdir(git_str_cstr(&path)));
 	/* won't confirm specific contents of hooks dir since it may vary */
 
-	git_buf_dispose(&path);
+	git_str_dispose(&path);
 }
 
 static void assert_config_entry_on_init_bytype(
@@ -257,7 +257,7 @@ void test_repo_init__symlinks_win32_enabled_by_global_config(void)
 	git_config *config, *repo_config;
 	int val;
 
-	if (!git_path_supports_symlinks("link"))
+	if (!git_fs_path_supports_symlinks("link"))
 		cl_skip();
 
 	create_tmp_global_config("tmp_global_config", "core.symlinks", "true");
@@ -303,7 +303,7 @@ void test_repo_init__symlinks_posix_detected(void)
 	cl_skip();
 #else
 	assert_config_entry_on_init(
-	    "core.symlinks", git_path_supports_symlinks("link") ? GIT_ENOTFOUND : false);
+	    "core.symlinks", git_fs_path_supports_symlinks("link") ? GIT_ENOTFOUND : false);
 #endif
 }
 
@@ -418,12 +418,12 @@ void test_repo_init__extended_1(void)
 
 	cl_assert(!git__suffixcmp(git_repository_workdir(g_repo), "/c_wd/"));
 	cl_assert(!git__suffixcmp(git_repository_path(g_repo), "/c.git/"));
-	cl_assert(git_path_isfile("root/b/c_wd/.git"));
+	cl_assert(git_fs_path_isfile("root/b/c_wd/.git"));
 	cl_assert(!git_repository_is_bare(g_repo));
 	/* repo will not be counted as empty because we set head to "development" */
 	cl_assert(!git_repository_is_empty(g_repo));
 
-	cl_git_pass(git_path_lstat(git_repository_path(g_repo), &st));
+	cl_git_pass(git_fs_path_lstat(git_repository_path(g_repo), &st));
 	cl_assert(S_ISDIR(st.st_mode));
 	if (cl_is_chmod_supported())
 		cl_assert((S_ISGID & st.st_mode) == S_ISGID);
@@ -447,7 +447,7 @@ void test_repo_init__extended_1(void)
 void test_repo_init__relative_gitdir(void)
 {
 	git_repository_init_options opts = GIT_REPOSITORY_INIT_OPTIONS_INIT;
-	git_buf dot_git_content = GIT_BUF_INIT;
+	git_str dot_git_content = GIT_STR_INIT;
 
 	opts.workdir_path = "../c_wd";
 	opts.flags =
@@ -472,18 +472,18 @@ void test_repo_init__relative_gitdir(void)
 	cl_git_pass(git_futils_readbuffer(&dot_git_content, "root/b/c_wd/.git"));
 	cl_assert_equal_s("gitdir: ../my_repository/", dot_git_content.ptr);
 
-	git_buf_dispose(&dot_git_content);
+	git_str_dispose(&dot_git_content);
 	cleanup_repository("root");
 }
 
 void test_repo_init__relative_gitdir_2(void)
 {
 	git_repository_init_options opts = GIT_REPOSITORY_INIT_OPTIONS_INIT;
-	git_buf dot_git_content = GIT_BUF_INIT;
-	git_buf full_path = GIT_BUF_INIT;
+	git_str dot_git_content = GIT_STR_INIT;
+	git_str full_path = GIT_STR_INIT;
 
-	cl_git_pass(git_path_prettify(&full_path, ".", NULL));
-	cl_git_pass(git_buf_joinpath(&full_path, full_path.ptr, "root/b/c_wd"));
+	cl_git_pass(git_fs_path_prettify(&full_path, ".", NULL));
+	cl_git_pass(git_str_joinpath(&full_path, full_path.ptr, "root/b/c_wd"));
 
 	opts.workdir_path = full_path.ptr;
 	opts.flags =
@@ -493,7 +493,7 @@ void test_repo_init__relative_gitdir_2(void)
 
 	/* make the directory first, then it should succeed */
 	cl_git_pass(git_repository_init_ext(&g_repo, "root/b/my_repository", &opts));
-	git_buf_dispose(&full_path);
+	git_str_dispose(&full_path);
 
 	cl_assert(!git__suffixcmp(git_repository_workdir(g_repo), "root/b/c_wd/"));
 	cl_assert(!git__suffixcmp(git_repository_path(g_repo), "root/b/my_repository/"));
@@ -509,7 +509,7 @@ void test_repo_init__relative_gitdir_2(void)
 	cl_git_pass(git_futils_readbuffer(&dot_git_content, "root/b/c_wd/.git"));
 	cl_assert_equal_s("gitdir: ../my_repository/", dot_git_content.ptr);
 
-	git_buf_dispose(&dot_git_content);
+	git_str_dispose(&dot_git_content);
 	cleanup_repository("root");
 }
 
@@ -598,25 +598,25 @@ void test_repo_init__at_filesystem_root(void)
 {
 	git_repository *repo;
 	const char *sandbox = clar_sandbox_path();
-	git_buf root = GIT_BUF_INIT;
+	git_str root = GIT_STR_INIT;
 	int root_len;
 
 	if (!cl_is_env_set("GITTEST_INVASIVE_FS_STRUCTURE"))
 		cl_skip();
 
-	root_len = git_path_root(sandbox);
+	root_len = git_fs_path_root(sandbox);
 	cl_assert(root_len >= 0);
 
-	git_buf_put(&root, sandbox, root_len+1);
-	git_buf_joinpath(&root, root.ptr, "libgit2_test_dir");
+	git_str_put(&root, sandbox, root_len+1);
+	git_str_joinpath(&root, root.ptr, "libgit2_test_dir");
 
-	cl_assert(!git_path_exists(root.ptr));
+	cl_assert(!git_fs_path_exists(root.ptr));
 
 	cl_git_pass(git_repository_init(&repo, root.ptr, 0));
-	cl_assert(git_path_isdir(root.ptr));
+	cl_assert(git_fs_path_isdir(root.ptr));
 	cl_git_pass(git_futils_rmdir_r(root.ptr, NULL, GIT_RMDIR_REMOVE_FILES));
 
-	git_buf_dispose(&root);
+	git_str_dispose(&root);
 	git_repository_free(repo);
 }
 
@@ -710,29 +710,29 @@ void test_repo_init__longpath(void)
 #ifdef GIT_WIN32
 	size_t padding = CONST_STRLEN("objects/pack/pack-.pack.lock") + GIT_OID_HEXSZ;
 	size_t max, i;
-	git_buf path = GIT_BUF_INIT;
+	git_str path = GIT_STR_INIT;
 	git_repository *one = NULL, *two = NULL;
 
 	/*
 	 * Files within repositories need to fit within MAX_PATH;
 	 * that means a repo path must be at most (MAX_PATH - 18).
 	 */
-	cl_git_pass(git_buf_puts(&path, clar_sandbox_path()));
-	cl_git_pass(git_buf_putc(&path, '/'));
+	cl_git_pass(git_str_puts(&path, clar_sandbox_path()));
+	cl_git_pass(git_str_putc(&path, '/'));
 
 	max = ((MAX_PATH) - path.size) - padding;
 
 	for (i = 0; i < max - 1; i++)
-		cl_git_pass(git_buf_putc(&path, 'a'));
+		cl_git_pass(git_str_putc(&path, 'a'));
 
 	cl_git_pass(git_repository_init(&one, path.ptr, 1));
 
 	/* Paths longer than this are rejected */
-	cl_git_pass(git_buf_putc(&path, 'z'));
+	cl_git_pass(git_str_putc(&path, 'z'));
 	cl_git_fail(git_repository_init(&two, path.ptr, 1));
 
 	git_repository_free(one);
 	git_repository_free(two);
-	git_buf_dispose(&path);
+	git_str_dispose(&path);
 #endif
 }

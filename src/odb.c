@@ -109,7 +109,7 @@ int git_odb__format_object_header(
 
 int git_odb__hashobj(git_oid *id, git_rawobj *obj)
 {
-	git_buf_vec vec[2];
+	git_str_vec vec[2];
 	char header[64];
 	size_t hdrlen;
 	int error;
@@ -136,7 +136,7 @@ int git_odb__hashobj(git_oid *id, git_rawobj *obj)
 	vec[1].data = obj->data;
 	vec[1].len = obj->len;
 
-	return git_hash_vec(id, vec, 2);
+	return git_hash_vec(id->id, vec, 2, GIT_HASH_ALGORITHM_SHA1);
 }
 
 
@@ -210,7 +210,7 @@ int git_odb__hashfd(git_oid *out, git_file fd, size_t size, git_object_t type)
 		return -1;
 	}
 
-	if ((error = git_hash_ctx_init(&ctx)) < 0)
+	if ((error = git_hash_ctx_init(&ctx, GIT_HASH_ALGORITHM_SHA1)) < 0)
 		return error;
 
 	if ((error = git_odb__format_object_header(&hdr_len, hdr,
@@ -237,7 +237,7 @@ int git_odb__hashfd(git_oid *out, git_file fd, size_t size, git_object_t type)
 		goto done;
 	}
 
-	error = git_hash_final(out, &ctx);
+	error = git_hash_final(out->id, &ctx);
 
 done:
 	git_hash_ctx_cleanup(&ctx);
@@ -248,7 +248,7 @@ int git_odb__hashfd_filtered(
 	git_oid *out, git_file fd, size_t size, git_object_t type, git_filter_list *fl)
 {
 	int error;
-	git_buf raw = GIT_BUF_INIT;
+	git_str raw = GIT_STR_INIT;
 
 	if (!fl)
 		return git_odb__hashfd(out, fd, size, type);
@@ -258,14 +258,14 @@ int git_odb__hashfd_filtered(
 	 */
 
 	if (!(error = git_futils_readbuffer_fd(&raw, fd, size))) {
-		git_buf post = GIT_BUF_INIT;
+		git_str post = GIT_STR_INIT;
 
 		error = git_filter_list__convert_buf(&post, fl, &raw);
 
 		if (!error)
 			error = git_odb_hash(out, post.ptr, post.size, type);
 
-		git_buf_dispose(&post);
+		git_str_dispose(&post);
 	}
 
 	return error;
@@ -277,7 +277,7 @@ int git_odb__hashlink(git_oid *out, const char *path)
 	int size;
 	int result;
 
-	if (git_path_lstat(path, &st) < 0)
+	if (git_fs_path_lstat(path, &st) < 0)
 		return -1;
 
 	if (!git__is_int(st.st_size) || (int)st.st_size < 0) {
@@ -636,8 +636,8 @@ int git_odb__add_default_backends(
 
 static int load_alternates(git_odb *odb, const char *objects_dir, int alternate_depth)
 {
-	git_buf alternates_path = GIT_BUF_INIT;
-	git_buf alternates_buf = GIT_BUF_INIT;
+	git_str alternates_path = GIT_STR_INIT;
+	git_str alternates_buf = GIT_STR_INIT;
 	char *buffer;
 	const char *alternate;
 	int result = 0;
@@ -646,16 +646,16 @@ static int load_alternates(git_odb *odb, const char *objects_dir, int alternate_
 	if (alternate_depth > GIT_ALTERNATES_MAX_DEPTH)
 		return 0;
 
-	if (git_buf_joinpath(&alternates_path, objects_dir, GIT_ALTERNATES_FILE) < 0)
+	if (git_str_joinpath(&alternates_path, objects_dir, GIT_ALTERNATES_FILE) < 0)
 		return -1;
 
-	if (git_path_exists(alternates_path.ptr) == false) {
-		git_buf_dispose(&alternates_path);
+	if (git_fs_path_exists(alternates_path.ptr) == false) {
+		git_str_dispose(&alternates_path);
 		return 0;
 	}
 
 	if (git_futils_readbuffer(&alternates_buf, alternates_path.ptr) < 0) {
-		git_buf_dispose(&alternates_path);
+		git_str_dispose(&alternates_path);
 		return -1;
 	}
 
@@ -672,17 +672,17 @@ static int load_alternates(git_odb *odb, const char *objects_dir, int alternate_
 		 * the current repository.
 		 */
 		if (*alternate == '.' && !alternate_depth) {
-			if ((result = git_buf_joinpath(&alternates_path, objects_dir, alternate)) < 0)
+			if ((result = git_str_joinpath(&alternates_path, objects_dir, alternate)) < 0)
 				break;
-			alternate = git_buf_cstr(&alternates_path);
+			alternate = git_str_cstr(&alternates_path);
 		}
 
 		if ((result = git_odb__add_default_backends(odb, alternate, true, alternate_depth + 1)) < 0)
 			break;
 	}
 
-	git_buf_dispose(&alternates_path);
-	git_buf_dispose(&alternates_buf);
+	git_str_dispose(&alternates_path);
+	git_str_dispose(&alternates_buf);
 
 	return result;
 }
@@ -883,6 +883,11 @@ int git_odb__freshen(git_odb *db, const git_oid *id)
 
 int git_odb_exists(git_odb *db, const git_oid *id)
 {
+    return git_odb_exists_ext(db, id, 0);
+}
+
+int git_odb_exists_ext(git_odb *db, const git_oid *id, unsigned int flags)
+{
 	git_odb_object *object;
 
 	GIT_ASSERT_ARG(db);
@@ -899,7 +904,7 @@ int git_odb_exists(git_odb *db, const git_oid *id)
 	if (odb_exists_1(db, id, false))
 		return 1;
 
-	if (!git_odb_refresh(db))
+	if (!(flags & GIT_ODB_LOOKUP_NO_REFRESH) && !git_odb_refresh(db))
 		return odb_exists_1(db, id, true);
 
 	/* Failed to refresh, hence not found */
@@ -1337,15 +1342,15 @@ static int read_prefix_1(git_odb_object **out, git_odb *db,
 			data = raw.data;
 
 			if (found && git_oid__cmp(&full_oid, &found_full_oid)) {
-				git_buf buf = GIT_BUF_INIT;
+				git_str buf = GIT_STR_INIT;
 
-				git_buf_printf(&buf, "multiple matches for prefix: %s",
+				git_str_printf(&buf, "multiple matches for prefix: %s",
 					git_oid_tostr_s(&full_oid));
-				git_buf_printf(&buf, " %s",
+				git_str_printf(&buf, " %s",
 					git_oid_tostr_s(&found_full_oid));
 
 				error = git_odb__error_ambiguous(buf.ptr);
-				git_buf_dispose(&buf);
+				git_str_dispose(&buf);
 				git_mutex_unlock(&db->lock);
 				goto out;
 			}
@@ -1561,7 +1566,7 @@ int git_odb_open_wstream(
 	ctx = git__malloc(sizeof(git_hash_ctx));
 	GIT_ERROR_CHECK_ALLOC(ctx);
 
-	if ((error = git_hash_ctx_init(ctx)) < 0 ||
+	if ((error = git_hash_ctx_init(ctx, GIT_HASH_ALGORITHM_SHA1)) < 0 ||
 		(error = hash_header(ctx, size, type)) < 0)
 		goto done;
 
@@ -1607,7 +1612,7 @@ int git_odb_stream_finalize_write(git_oid *out, git_odb_stream *stream)
 		return git_odb_stream__invalid_length(stream,
 			"stream_finalize_write()");
 
-	git_hash_final(out, stream->hash_ctx);
+	git_hash_final(out->id, stream->hash_ctx);
 
 	if (git_odb__freshen(stream->backend->odb, out))
 		return 0;

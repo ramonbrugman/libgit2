@@ -86,10 +86,15 @@ typedef struct git_worktree_add_options {
 
 	int lock; /**< lock newly created worktree */
 	git_reference *ref; /**< reference to use for the new worktree HEAD */
+
+	/**
+	 * Options for the checkout.
+	 */
+	git_checkout_options checkout_options;
 } git_worktree_add_options;
 
 #define GIT_WORKTREE_ADD_OPTIONS_VERSION 1
-#define GIT_WORKTREE_ADD_OPTIONS_INIT {GIT_WORKTREE_ADD_OPTIONS_VERSION,0,NULL}
+#define GIT_WORKTREE_ADD_OPTIONS_INIT {GIT_WORKTREE_ADD_OPTIONS_VERSION,0,NULL,GIT_CHECKOUT_OPTIONS_INIT}
 
 /**
  * Initialize git_worktree_add_options structure
@@ -185,7 +190,7 @@ typedef enum {
 	/* Prune working tree even if it is locked */
 	GIT_WORKTREE_PRUNE_LOCKED = 1u << 1,
 	/* Prune checked out working tree */
-	GIT_WORKTREE_PRUNE_WORKING_TREE = 1u << 2,
+	GIT_WORKTREE_PRUNE_WORKING_TREE = 1u << 2
 } git_worktree_prune_t;
 
 /**

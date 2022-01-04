@@ -32,7 +32,7 @@ typedef enum {
 	GIT_FILTER_TO_WORKTREE = 0,
 	GIT_FILTER_SMUDGE = GIT_FILTER_TO_WORKTREE,
 	GIT_FILTER_TO_ODB = 1,
-	GIT_FILTER_CLEAN = GIT_FILTER_TO_ODB,
+	GIT_FILTER_CLEAN = GIT_FILTER_TO_ODB
 } git_filter_mode_t;
 
 /**
@@ -54,7 +54,7 @@ typedef enum {
 	 * Load attributes from `.gitattributes` in a given commit.
 	 * This can only be specified in a `git_filter_options`.
 	 */
-	GIT_FILTER_ATTRIBUTES_FROM_COMMIT = (1u << 3),
+	GIT_FILTER_ATTRIBUTES_FROM_COMMIT = (1u << 3)
 } git_filter_flag_t;
 
 /**
@@ -66,11 +66,17 @@ typedef struct {
 	/** See `git_filter_flag_t` above */
 	uint32_t flags;
 
+#ifdef GIT_DEPRECATE_HARD
+	void *reserved;
+#else
+	git_oid *commit_id;
+#endif
+
 	/**
 	 * The commit to load attributes from, when
 	 * `GIT_FILTER_ATTRIBUTES_FROM_COMMIT` is specified.
 	 */
-	git_oid *commit_id;
+	git_oid attr_commit_id;
 } git_filter_options;
 
  #define GIT_FILTER_OPTIONS_VERSION 1

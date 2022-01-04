@@ -236,18 +236,18 @@ Once built, you can run the tests from the `build` directory with the command
 
 Alternatively you can run the test suite directly using,
 
-	$ ./libgit2_clar
+	$ ./libgit2_tests
 
 Invoking the test suite directly is useful because it allows you to execute
 individual tests, or groups of tests using the `-s` flag.  For example, to
 run the index tests:
 
-    $ ./libgit2_clar -sindex
+    $ ./libgit2_tests -sindex
 
 To run a single test named `index::racy::diff`, which corresponds to the test
 function [`test_index_racy__diff`](https://github.com/libgit2/libgit2/blob/main/tests/index/racy.c#L23):
 
-    $ ./libgit2_clar -sindex::racy::diff
+    $ ./libgit2_tests -sindex::racy::diff
 
 The test suite will print a `.` for every passing test, and an `F` for any
 failing test.  An `S` indicates that a test was skipped because it is not
@@ -278,8 +278,8 @@ The following CMake variables are declared:
 - `CMAKE_INSTALL_LIBDIR`: Where to install libraries to.
 - `CMAKE_INSTALL_INCLUDEDIR`: Where to install headers to.
 - `BUILD_SHARED_LIBS`: Build libgit2 as a Shared Library (defaults to ON)
-- `BUILD_CLAR`: Build [Clar](https://github.com/vmg/clar)-based test suite (defaults to ON)
-- `THREADSAFE`: Build libgit2 with threading support (defaults to ON)
+- `BUILD_TESTS`: Build the unit and integration test suites (defaults to ON)
+- `USE_THREADS`: Build libgit2 with threading support (defaults to ON)
 
 To list all build options and their current value, you can do the
 following:
@@ -371,6 +371,7 @@ Here are the bindings to libgit2 that are currently available:
     * hgit2 <https://github.com/jwiegley/gitlib>
 * Java
     * Jagged <https://github.com/ethomson/jagged>
+    * Git24j <https://github.com/git24j/git24j>
 * Javascript / WebAssembly ( browser and nodejs )
     * WASM-git <https://github.com/petersalomonsen/wasm-git>
 * Julia
@@ -391,8 +392,6 @@ Here are the bindings to libgit2 that are currently available:
     * Git-Raw <https://github.com/jacquesg/p5-Git-Raw>
 * PHP
     * php-git <https://github.com/libgit2/php-git>
-* PowerShell
-    * PSGit <https://github.com/PoshCode/PSGit>
 * Python
     * pygit2 <https://github.com/libgit2/pygit2>
 * R

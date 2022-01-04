@@ -1,6 +1,7 @@
 #include "clar_libgit2.h"
-#include "remote.h"
+#include "futils.h"
 #include "net.h"
+#include "remote.h"
 
 static git_repository *repo;
 static git_net_url url = GIT_NET_URL_INIT;
@@ -39,7 +40,7 @@ void test_remote_httpproxy__cleanup(void)
 	cl_git_sandbox_cleanup();
 }
 
-void assert_proxy_is(const char *expected)
+static void assert_proxy_is(const char *expected)
 {
 	git_remote *remote;
 	char *proxy;
@@ -56,7 +57,7 @@ void assert_proxy_is(const char *expected)
 	git__free(proxy);
 }
 
-void assert_config_match(const char *config, const char *expected)
+static void assert_config_match(const char *config, const char *expected)
 {
 	git_remote *remote;
 	char *proxy;
@@ -105,12 +106,56 @@ void test_remote_httpproxy__config_empty_overrides(void)
 	assert_config_match("remote.lg2.proxy", "");
 }
 
+static void assert_global_config_match(const char *config, const char *expected)
+{
+	git_remote *remote;
+	char *proxy;
+	git_config* cfg;
+
+	if (config) {
+		cl_git_pass(git_config_open_default(&cfg));
+		git_config_set_string(cfg, config, expected);
+		git_config_free(cfg);
+	}
+
+	cl_git_pass(git_remote_create_detached(&remote, "https://github.com/libgit2/libgit2"));
+	cl_git_pass(git_remote__http_proxy(&proxy, remote, &url));
+
+	if (expected)
+		cl_assert_equal_s(proxy, expected);
+	else
+		cl_assert_equal_p(proxy, expected);
+
+	git_remote_free(remote);
+	git__free(proxy);
+}
+
+void test_remote_httpproxy__config_overrides_detached_remote(void)
+{
+	cl_fake_home();
+
+	assert_global_config_match(NULL, NULL);
+	assert_global_config_match("http.proxy", "http://localhost:1/");
+	assert_global_config_match("http.https://github.com.proxy", "http://localhost:2/");
+	assert_global_config_match("http.https://github.com/.proxy", "http://localhost:3/");
+	assert_global_config_match("http.https://github.com/libgit2.proxy", "http://localhost:4/");
+	assert_global_config_match("http.https://github.com/libgit2/.proxy", "http://localhost:5/");
+	assert_global_config_match("http.https://github.com/libgit2/libgit2.proxy", "http://localhost:6/");
+
+	cl_git_pass(git_futils_rmdir_r("home", NULL, GIT_RMDIR_REMOVE_FILES));
+}
+
 void test_remote_httpproxy__env(void)
 {
 	orig_http_proxy = cl_getenv("HTTP_PROXY");
 	orig_https_proxy = cl_getenv("HTTPS_PROXY");
 	orig_no_proxy = cl_getenv("NO_PROXY");
 	orig_proxies_need_reset = 1;
+
+	/* Clear everything for a fresh start */
+	cl_setenv("HTTP_PROXY", NULL);
+	cl_setenv("HTTPS_PROXY", NULL);
+	cl_setenv("NO_PROXY", NULL);
 
 	/* HTTP proxy is ignored for HTTPS */
 	cl_setenv("HTTP_PROXY", "http://localhost:9/");
@@ -133,7 +178,11 @@ void test_remote_httpproxy__env(void)
 	cl_setenv("NO_PROXY", "github.dev,github.com,github.foo");
 	assert_proxy_is(NULL);
 
+	cl_setenv("HTTPS_PROXY", "");
+	assert_proxy_is(NULL);
+
 	/* configuration overrides environment variables */
+	cl_setenv("HTTPS_PROXY", "http://localhost:10/");
 	cl_setenv("NO_PROXY", "github.none");
 	assert_config_match("http.https://github.com.proxy", "http://localhost:11/");
 }
